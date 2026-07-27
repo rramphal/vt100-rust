@@ -1,5 +1,13 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+* Handle HVP (`CSI f`), which is functionally identical to CUP (`CSI H`).
+  It was previously dispatched as an unhandled sequence, silently dropping
+  every cursor movement made by applications that emit it. (#26)
+
 ## [0.16.2] - 2025-07-11
 
 ### Fixed

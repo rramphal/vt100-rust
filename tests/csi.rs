@@ -16,6 +16,30 @@ fn row_clamp() {
 }
 
 #[test]
+fn hvp() {
+    let mut vt = vt100::Parser::default();
+    assert_eq!(vt.screen().cursor_position(), (0, 0));
+    vt.process(b"\x1b[10;40fX");
+    assert_eq!(vt.screen().cell(9, 39).unwrap().contents(), "X");
+    assert_eq!(vt.screen().cursor_position(), (9, 40));
+    vt.process(b"\x1b[fY");
+    assert_eq!(vt.screen().cell(0, 0).unwrap().contents(), "Y");
+    vt.process(b"\x1b[0;0fZ");
+    assert_eq!(vt.screen().cell(0, 0).unwrap().contents(), "Z");
+    vt.process(b"\x1b[150;500f");
+    assert_eq!(vt.screen().cursor_position(), (23, 79));
+
+    let mut cup = vt100::Parser::default();
+    cup.process(b"\x1b[10;40H");
+    let mut hvp = vt100::Parser::default();
+    hvp.process(b"\x1b[10;40f");
+    assert_eq!(
+        cup.screen().cursor_position(),
+        hvp.screen().cursor_position()
+    );
+}
+
+#[test]
 fn relative_movement() {
     helpers::fixture("relative_movement");
 }
