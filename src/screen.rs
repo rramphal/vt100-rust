@@ -92,6 +92,8 @@ pub struct Screen {
     cursor_style: CursorStyle,
 
     last_char: Option<char>,
+
+    vs16_wide: bool,
 }
 
 impl Screen {
@@ -122,6 +124,8 @@ impl Screen {
             cursor_style: CursorStyle::default(),
 
             last_char: None,
+
+            vs16_wide: true,
         }
     }
 
@@ -186,6 +190,33 @@ impl Screen {
     /// `CSI 2 J` and `CSI 3 J`.
     pub fn clear_scrollback(&mut self) {
         self.grid_mut().erase_all_scrollback(|_| {});
+    }
+
+    /// Sets whether U+FE0F (variation selector 16) makes the preceding
+    /// narrow character wide.
+    ///
+    /// When enabled (the default), a narrow base followed by VS16, such as
+    /// `❤️`, occupies two columns, matching terminals that render emoji
+    /// presentation as wide (kitty and Ghostty, for instance, and tmux by
+    /// default).
+    /// When disabled, VS16 is zero-width like any other combining character
+    /// and the base keeps its own width, matching `wcwidth(3)` and the
+    /// programs that rely on it (readline, zsh, vim) as well as terminals
+    /// that measure each character on its own (Alacritty). Applications that
+    /// move the cursor relative to text they printed only stay in sync when
+    /// this matches the width model they use.
+    ///
+    /// This affects characters processed after the call; existing cells keep
+    /// their width.
+    pub fn set_vs16_wide(&mut self, vs16_wide: bool) {
+        self.vs16_wide = vs16_wide;
+    }
+
+    /// Returns whether U+FE0F makes the preceding narrow character wide. See
+    /// [`Screen::set_vs16_wide`].
+    #[must_use]
+    pub fn vs16_wide(&self) -> bool {
+        self.vs16_wide
     }
 
     /// Returns the current position in the scrollback.
@@ -926,6 +957,7 @@ impl Screen {
     ) {
         if new_pos.col == 0 {
             let attrs = self.attrs;
+            let vs16_wide = self.vs16_wide;
             let contents = self
                 .grid()
                 .drawing_cell(old_pos)
@@ -935,7 +967,7 @@ impl Screen {
             self.grid_mut()
                 .drawing_cell_mut(new_pos)
                 .unwrap()
-                .set_contents(&contents, attrs);
+                .set_contents(&contents, attrs, vs16_wide);
             self.grid_mut()
                 .drawing_cell_mut(old_pos)
                 .unwrap()
@@ -1124,11 +1156,12 @@ impl<CB: crate::Callbacks> WrappedScreen<CB> {
             cell_was_wide =
                 screen.grid().drawing_cell(base_pos).unwrap().is_wide();
 
+            let vs16_wide = screen.vs16_wide;
             screen
                 .grid_mut()
                 .drawing_cell_mut(base_pos)
                 .unwrap()
-                .append(c);
+                .append(c, vs16_wide);
             let cell_is_wide =
                 screen.grid().drawing_cell(base_pos).unwrap().is_wide();
             if !cell_was_wide && cell_is_wide {

@@ -46,14 +46,15 @@ impl Cell {
 
     pub(crate) fn set(&mut self, c: char, a: crate::attrs::Attrs) {
         self.len = 0;
-        self.append_char(0, c);
+        // the width is set from `c` alone just below
+        self.append_char(0, c, false);
         // if we're setting a single character, we can just look at that one
         // character to determine the cell width
         self.set_wide(c.width().unwrap_or(1) > 1);
         self.attrs = a;
     }
 
-    pub(crate) fn append(&mut self, c: char) {
+    pub(crate) fn append(&mut self, c: char, vs16_wide: bool) {
         let len = self.len();
         if len >= CONTENT_BYTES - 4 {
             return;
@@ -64,29 +65,34 @@ impl Cell {
         }
 
         // we already checked that we have space for another codepoint
-        self.append_char(self.len(), c);
+        self.append_char(self.len(), c, vs16_wide);
     }
 
-    pub(crate) fn set_contents(&mut self, s: &str, a: crate::attrs::Attrs) {
+    pub(crate) fn set_contents(
+        &mut self,
+        s: &str,
+        a: crate::attrs::Attrs,
+        vs16_wide: bool,
+    ) {
         let mut chars = s.chars();
         let Some(c) = chars.next() else {
             return;
         };
         self.set(c, a);
         for c in chars {
-            self.append(c);
+            self.append(c, vs16_wide);
         }
     }
 
     // Writes bytes representing c at start
     // Requires caller to verify start <= CODEPOINTS_IN_CELL * 4
-    fn append_char(&mut self, start: usize, c: char) {
+    fn append_char(&mut self, start: usize, c: char, vs16_wide: bool) {
         c.encode_utf8(&mut self.contents[start..]);
         self.len += u8::try_from(c.len_utf8()).unwrap();
         // if we're appending characters, we have to account for emoji
         // presentation being requested, which can turn a base character that
         // is otherwise considered to be narrow into a wide character
-        if c == '\u{FE0F}' {
+        if vs16_wide && c == '\u{FE0F}' {
             self.set_wide(self.contents().width() > 1);
         }
     }

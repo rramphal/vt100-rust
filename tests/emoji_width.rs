@@ -99,3 +99,41 @@ fn vs16_emoji_wrapping() {
     assert_eq!(cell(&parser, 1, 2), ("b".into(), false, false));
     assert_eq!(parser.screen().cursor_position(), (1, 2));
 }
+
+#[test]
+fn vs16_emoji_stays_narrow_when_vs16_wide_is_disabled() {
+    let mut parser = helpers::new(1, 20, 0);
+    parser.screen_mut().set_vs16_wide(false);
+    assert!(!parser.screen().vs16_wide());
+    parser.process("A\u{2764}\u{FE0F}B".as_bytes());
+
+    assert_eq!(cell(&parser, 0, 0), ("A".into(), false, false), "col0 = A");
+    assert_eq!(
+        cell(&parser, 0, 1),
+        ("\u{2764}\u{FE0F}".into(), false, false),
+        "col1 = ❤️, kept narrow"
+    );
+    assert_eq!(cell(&parser, 0, 2), ("B".into(), false, false), "col2 = B");
+    assert_eq!(parser.screen().cursor_position(), (0, 3));
+}
+
+#[test]
+fn vs16_narrow_matches_wcwidth_cursor_movement() {
+    // a line editor using wcwidth (readline, zsh, vim) counts ❤️ as one
+    // column, so three backspaces from the end of "a❤️bc" land on the heart
+    let mut parser = helpers::new(1, 20, 0);
+    parser.screen_mut().set_vs16_wide(false);
+    parser.process("a\u{2764}\u{FE0F}bc\x08\x08\x08".as_bytes());
+
+    assert_eq!(parser.screen().cursor_position(), (0, 1));
+    assert_eq!(
+        cell(&parser, 0, 1),
+        ("\u{2764}\u{FE0F}".into(), false, false)
+    );
+}
+
+#[test]
+fn vs16_wide_is_the_default() {
+    let parser = helpers::new(1, 20, 0);
+    assert!(parser.screen().vs16_wide());
+}
